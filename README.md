@@ -122,7 +122,7 @@ WantedBy=multi-user.target
 
 ```bash
 stemctl daemon-reload
-systemctl ddaemon-reload ip-checker-bot.service
+systemctl daemon-reload ip-checker-bot.service
 
 ```
 
