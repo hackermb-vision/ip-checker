@@ -80,8 +80,70 @@ python bot_ip_watcher.py
 
 3. The bot will automatically notify you when your IP address changes
 
-## How It Works
+## Systemd Service
 
+You can run the bot as a persistent background service using systemd.
+
+### Create the service file
+
+Create `/etc/systemd/system/ip-checker-bot.service`:
+```ini
+[Unit]
+Description=Telegram IP Checker Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/ip-checker
+
+# Load environment variables (BOT_TOKEN, ALLOWED_CHAT_IDS, etc.)
+EnvironmentFile=/root/ip-checker/.env
+
+# Use system Python (no virtualenv)
+ExecStart=/usr/bin/python3 /root/ip-checker/bot_ip_watcher.py
+
+# Run as root (suitable for containers)
+User=root
+Group=root
+
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
+```
+
+### Enable and start the service
+
+```bash
+stemctl daemon-reload
+systemctl ddaemon-reload ip-checker-bot.service
+
+```
+
+### Check service status and logs
+
+```bash
+systemctl status ip-checker-bot.service --no-pager
+journalctl -u ip-checker-bot.service -f
+
+```
+
+### Notes
+
+- The .env file must be readable by root
+- /usr/bin/python3 must have all required dependencies installed
+- This service works on systems with systemd (VMs, bare metal, privileged containers)
+- For Docker or non-systemd containers, use a container entrypoint instead
+- For this exact systemd file to work the project hast to be in `/root/` and the `.env` file has to be in `/root/ip-checker/`
+- For security reasons it is recomended to use this inside an container like LXC or modify the systemd file so that it uses a dedicated user
+
+## How It Worksk
 - The bot periodically checks your public IP address by querying https://checkip.amazonaws.com/
 - If multiple interfaces or local addresses are configured, it checks each one separately
 - When a change is detected, it sends a notification to all allowed chat IDs
