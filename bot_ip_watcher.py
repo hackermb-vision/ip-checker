@@ -246,8 +246,8 @@ async def periodic_check(context: ContextTypes.DEFAULT_TYPE) -> None:
                 logger.error(f"Failed to notify chat_id={chat_id}: {e}")
 
 
-async def handle_unauthorized_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle messages from unauthorized users."""
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle non-command messages and respond to unauthorized users."""
     cfg: Config = context.application.bot_data["cfg"]
     
     if not in_allowed_chat(update, cfg):
@@ -278,9 +278,9 @@ def main() -> None:
     logger.info("Registering command handlers...")
     app.add_handler(CommandHandler("ip", cmd_ip))
     
-    # Add a handler for all other messages (both authorized and unauthorized)
+    # Add a handler for all other text messages (both authorized and unauthorized)
     # This must be last so commands are handled first
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_unauthorized_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info(f"Starting periodic IP check (interval: {cfg.check_interval_seconds}s)...")
     app.job_queue.run_repeating(
