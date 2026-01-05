@@ -120,19 +120,12 @@ def _resolve_interface_ipv4_addrs(interfaces: List[str]) -> List[str]:
 async def fetch_public_ip(
     session: aiohttp.ClientSession, local_addr: Optional[str]
 ) -> str:
-    timeout = aiohttp.ClientTimeout(total=10)
-
-    connector = None
-    if local_addr:
-        connector = aiohttp.TCPConnector(local_addr=(local_addr, 0))
-
     try:
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as s:
-            async with s.get(CHECK_URL, headers={"User-Agent": "ip-watcher-bot"}) as resp:
-                resp.raise_for_status()
-                text = (await resp.text()).strip()
-                logger.debug(f"Fetched IP: {text}" + (f" (via {local_addr})" if local_addr else ""))
-                return text
+        async with session.get(CHECK_URL, headers={"User-Agent": "ip-watcher-bot"}) as resp:
+            resp.raise_for_status()
+            text = (await resp.text()).strip()
+            logger.debug(f"Fetched IP: {text}" + (f" (via {local_addr})" if local_addr else ""))
+            return text
     except aiohttp.ClientError as e:
         logger.error(f"Error fetching public IP" + (f" via {local_addr}" if local_addr else "") + f": {e}")
         raise
@@ -151,13 +144,16 @@ async def fetch_all_public_ips(cfg: Config) -> Dict[str, str]:
     results: Dict[str, str] = {}
 
     if not local_addrs:
-        async with aiohttp.ClientSession() as session:
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             ip = await fetch_public_ip(session, None)
             results["default"] = ip
         return results
 
     async def one(addr: str) -> Tuple[str, str]:
-        async with aiohttp.ClientSession() as session:
+        timeout = aiohttp.ClientTimeout(total=10)
+        connector = aiohttp.TCPConnector(local_addr=(addr, 0))
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             ip = await fetch_public_ip(session, addr)
             return f"src:{addr}", ip
 
@@ -282,8 +278,9 @@ def main() -> None:
     logger.info("Registering command handlers...")
     app.add_handler(CommandHandler("ip", cmd_ip))
     
-    # Add a handler for all other messages from unauthorized users
-    app.add_handler(MessageHandler(filters.ALL, handle_unauthorized_message))
+    # Add a handler for all other messages (both authorized and unauthorized)
+    # This must be last so commands are handled first
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_unauthorized_message))
 
     logger.info(f"Starting periodic IP check (interval: {cfg.check_interval_seconds}s)...")
     app.job_queue.run_repeating(
